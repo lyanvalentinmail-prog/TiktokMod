@@ -11,7 +11,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - name: Validar etiqueta
@@ -30,6 +30,24 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
+          java-version: '21'
+      - name: Preparar y comprobar el paquete Morphe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 -m unittest discover -s tests -v
+          ./scripts/prepare-morphe.sh
+          cd build/metra-source
+          ./gradlew :patches:buildAndroid --no-daemon
+          ./gradlew :extensions:tiktok:testDebugUnitTest --no-daemon \
+            --tests app.morphe.extension.tiktok.settings.preference.ModGatewayFragmentTest \
+            --tests app.morphe.extension.tiktok.interaction.CopyIdsTest \
+            --tests app.morphe.extension.tiktok.comment.CommentCopySanitizerTest \
+            --tests app.morphe.extension.tiktok.externalbrowser.ExternalBrowserPatchTest \
+            --tests app.morphe.extension.tiktok.externalbrowser.ChromeLinkTest
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -40,7 +58,9 @@ jobs:
         run: |
           mkdir -p release
           cp app/build/outputs/apk/debug/app-debug.apk release/TikTok-Mod-modulo-debug.apk
-          (cd release && sha256sum TikTok-Mod-modulo-debug.apk > SHA256SUMS.txt)
+          cp build/metra-source/patches/build/release/*.mpp release/
+          tar -czf release/tiktokmod-morphe-source.tar.gz --exclude=.gradle --exclude='*/build' -C build/metra-source .
+          (cd release && sha256sum TikTok-Mod-modulo-debug.apk ./*.mpp tiktokmod-morphe-source.tar.gz > SHA256SUMS.txt)
           cat > release/NOTAS.md <<'NOTES'
           ## TikTok Mod: módulo experimental para Android
 
@@ -49,7 +69,7 @@ jobs:
           Las funciones y la entrada en ajustes dependen de la versión de TikTok y no están validadas en un dispositivo real.
 
           El APK está firmado con una clave de depuración generada en el runner. No es una versión de producción y una compilación posterior con otra clave puede requerir desinstalar el módulo anterior.
-          No contiene el paquete Morphe ni el perfil estilo Instagram; consulta el README para la alternativa Morphe y las limitaciones.
+          La release incluye también el paquete de parches Morphe (.mpp) y su código fuente GPL-3.0. El .mpp no es un APK: requiere Morphe Desktop y un APK de TikTok compatible proporcionado por el usuario. El perfil estilo Instagram todavía no está implementado. Consulta el README y morphe/README.md para conocer los límites.
           NOTES
       - uses: actions/upload-artifact@v4
         with:
@@ -58,11 +78,13 @@ jobs:
           path: |
             release/TikTok-Mod-modulo-debug.apk
             release/SHA256SUMS.txt
+            release/*.mpp
+            release/tiktokmod-morphe-source.tar.gz
       - name: Crear prerelease
         env:
           TAG: ${{ inputs.tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$TAG" release/TikTok-Mod-modulo-debug.apk release/SHA256SUMS.txt \
+          gh release create "$TAG" release/TikTok-Mod-modulo-debug.apk release/SHA256SUMS.txt release/*.mpp release/tiktokmod-morphe-source.tar.gz \
             --target "$GITHUB_SHA" --title "TikTok Mod $TAG (módulo experimental)" \
             --notes-file release/NOTAS.md --prerelease

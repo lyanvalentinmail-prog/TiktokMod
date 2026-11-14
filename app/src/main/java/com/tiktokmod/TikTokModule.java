@@ -72,7 +72,7 @@ public final class TikTokModule implements IXposedHookLoadPackage {
                 @Override protected void beforeHookedMethod(MethodHookParam param) {
                     View v = (View) param.thisObject;
                     Activity a = activity(v.getContext());
-                    if (a == null || !(v instanceof TextView) || !v.isShown() || !Matchers.isLink(resourceName(v)) || !ModSettings.enabled(a, ModSettings.LINK)) return;
+                    if (a == null || !(v instanceof TextView) || !v.isShown() || !Matchers.isLink(resourceName(v)) || !ModSettings.enabled(a, ModSettings.LINKS)) return;
                     CharSequence text = ((TextView) v).getText();
                     String url = Matchers.webUrl(text == null ? null : text.toString());
                     if (url == null) return;
