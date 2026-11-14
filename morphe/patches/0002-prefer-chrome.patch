@@ -1,0 +1,70 @@
+--- a/extensions/tiktok/src/main/java/app/morphe/extension/tiktok/externalbrowser/ExternalBrowserPatch.java
++++ b/extensions/tiktok/src/main/java/app/morphe/extension/tiktok/externalbrowser/ExternalBrowserPatch.java
+@@ -8,6 +8,8 @@
+ 
+ import android.app.Activity;
+ import android.content.Context;
++import android.content.Intent;
++import android.content.ActivityNotFoundException;
+ import android.net.Uri;
+ 
+ import java.lang.reflect.Field;
+@@ -80,6 +82,10 @@
+         if (context == null || uri == null) {
+             return false;
+         }
++
++        // Prefer Chrome for profile and story links. If it cannot handle the intent,
++        // retain Metra's original system-browser route rather than swallowing the click.
++        if (openInChrome(context, uri)) return true;
+ 
+         Class<?> serviceClass = Reflect.requiredClass(MAIN_SERVICE_CLASS, HOOK_FAMILY);
+         Class<?> managerClass = Reflect.requiredClass(SERVICE_MANAGER_CLASS, HOOK_FAMILY);
+@@ -101,6 +107,18 @@
+                 String.class);
+         return Boolean.TRUE.equals(Reflect.invokeRequired(
+                 openBrowser, service, HOOK_FAMILY, context, uri.toString()));
++    }
++
++    static boolean openInChrome(Context context, Uri uri) {
++        if (context == null || uri == null) return false;
++        Intent intent = new Intent(Intent.ACTION_VIEW, uri).setPackage("com.android.chrome");
++        if (!(context instanceof Activity)) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++        try {
++            context.startActivity(intent);
++            return true;
++        } catch (ActivityNotFoundException | SecurityException ignored) {
++            return false;
++        }
+     }
+ 
+     static Uri resolveTarget(String source) {
+--- a/extensions/tiktok/src/test/java/app/morphe/extension/tiktok/externalbrowser/ExternalBrowserPatchTest.java
++++ b/extensions/tiktok/src/test/java/app/morphe/extension/tiktok/externalbrowser/ExternalBrowserPatchTest.java
+@@ -114,8 +114,13 @@
+ 
+     @Test public void aRenamedBrowserServiceIsVisibleInHookStatus() {
+         AllowedSparkContext spark = new AllowedSparkContext();
+-        assertFalse(ExternalBrowserPatch.openSparkThirdContext(
+-                RuntimeEnvironment.getApplication(), spark));
++        // Exercise the fallback service even when Robolectric accepts unresolved intents.
++        android.content.Context noChrome = new android.content.ContextWrapper(RuntimeEnvironment.getApplication()) {
++            @Override public void startActivity(android.content.Intent intent) {
++                throw new android.content.ActivityNotFoundException();
++            }
++        };
++        assertFalse(ExternalBrowserPatch.openSparkThirdContext(noChrome, spark));
+ 
+         List<String> missing = HookStatus.missing("external browser");
+         assertEquals(missing.toString(), 2, missing.size());
+--- a/patches/src/main/kotlin/app/morphe/patches/tiktok/misc/externalbrowser/OpenExternalLinksPatch.kt
++++ b/patches/src/main/kotlin/app/morphe/patches/tiktok/misc/externalbrowser/OpenExternalLinksPatch.kt
+@@ -25,7 +25,7 @@
+ @Suppress("unused")
+ val openExternalLinksPatch = bytecodePatch(
+     name = "Open external links directly",
+-    description = "Opens website links from profiles and stories in your phone's own browser instead of TikTok's built-in one. On by default. Turn it off in Metra settings > App behavior.",
++    description = "Opens website links from profiles and stories in Chrome when available, otherwise your system browser. On by default. Turn it off in Metra settings > App behavior.",
+     default = true,
+ ) {
+     category("Interaction")

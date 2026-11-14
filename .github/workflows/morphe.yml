@@ -1,0 +1,45 @@
+name: Morphe patch bundle
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Verificar preparación
+        run: python3 -m unittest discover -s tests -v
+      - name: Preparar fuente fijada
+        run: ./scripts/prepare-morphe.sh
+      - name: Compilar y comprobar el paquete
+        working-directory: build/metra-source
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew :patches:buildAndroid --no-daemon
+          ./gradlew :extensions:tiktok:testDebugUnitTest --no-daemon \
+            --tests app.morphe.extension.tiktok.settings.preference.ModGatewayFragmentTest \
+            --tests app.morphe.extension.tiktok.interaction.CopyIdsTest \
+            --tests app.morphe.extension.tiktok.comment.CommentCopySanitizerTest \
+            --tests app.morphe.extension.tiktok.externalbrowser.ExternalBrowserPatchTest \
+            --tests app.morphe.extension.tiktok.externalbrowser.ChromeLinkTest
+      - name: Empaquetar fuente correspondiente
+        run: tar -czf "$RUNNER_TEMP/tiktokmod-morphe-source.tar.gz" --exclude=.gradle --exclude='*/build' -C build/metra-source .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tiktokmod-morphe
+          if-no-files-found: error
+          path: |
+            build/metra-source/patches/build/release/*.mpp
+            build/metra-source/patches/build/release/bundle.sha256
+            ${{ runner.temp }}/tiktokmod-morphe-source.tar.gz
