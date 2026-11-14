@@ -1,0 +1,54 @@
+--- a/extensions/tiktok/src/main/java/app/morphe/extension/tiktok/settings/TikTokActivityHook.java
++++ b/extensions/tiktok/src/main/java/app/morphe/extension/tiktok/settings/TikTokActivityHook.java
+@@ -19,6 +19,7 @@
+ import app.morphe.extension.shared.diagnostics.BuildDetails;
+ import app.morphe.extension.tiktok.settings.preference.SettingsActionBanner;
+ import app.morphe.extension.tiktok.settings.preference.SettingsUi;
++import app.morphe.extension.tiktok.settings.preference.ModGatewayFragment;
+ import app.morphe.extension.tiktok.settings.preference.TikTokPreferenceFragment;
+ 
+ import com.bytedance.ies.ugc.aweme.commercialize.compliance.personalization.AdPersonalizationActivity;
+@@ -93,8 +94,15 @@
+         if (restoredRoot == null) {
+             String section = intent.getStringExtra(SETTINGS_SECTION_EXTRA);
+             // A restart pressed far down the home page comes back scrolled to where it was.
+-            PreferenceFragment preferenceFragment = TikTokPreferenceFragment.home(
+-                    section == null || section.isEmpty() ? intent.getStringExtra(SETTINGS_PAGE_EXTRA) : null);
++            String returnPage = intent.getStringExtra(SETTINGS_PAGE_EXTRA);
++            String target = intent.getStringExtra(SETTINGS_TARGET_KEY_EXTRA);
++            boolean ordinaryEntry = (section == null || section.isEmpty())
++                    && (returnPage == null || returnPage.isEmpty())
++                    && (target == null || target.isEmpty());
++            // Direct links and restart restoration bypass the gateway to preserve Metra navigation.
++            PreferenceFragment preferenceFragment = ordinaryEntry ? new ModGatewayFragment()
++                    : TikTokPreferenceFragment.home(
++                            section == null || section.isEmpty() ? returnPage : null);
+             if (section != null && !section.isEmpty()) {
+                 Bundle arguments = new Bundle();
+                 arguments.putString(SETTINGS_SECTION_EXTRA, section);
+--- a/patches/src/main/kotlin/app/morphe/patches/tiktok/misc/settings/SettingsPatch.kt
++++ b/patches/src/main/kotlin/app/morphe/patches/tiktok/misc/settings/SettingsPatch.kt
+@@ -605,7 +605,7 @@
+         val moveResultIndex = getStringInvokeIndex + 1
+         val titleStringRegister = compose.getInstruction<OneRegisterInstruction>(moveResultIndex).registerA
+ 
+-        composeMutable.addInstruction(moveResultIndex + 1, "const-string v$titleStringRegister, \"Metra\"")
++        composeMutable.addInstruction(moveResultIndex + 1, "const-string v$titleStringRegister, \"TikTok Mod\"")
+ 
+         OpenDebugCellVmDefaultStateFingerprint.methodOrNull?.let { defaultState ->
+             defaultState.implementationOrPatchException("Settings")
+--- a/extensions/tiktok/src/main/java/app/morphe/extension/tiktok/settings/preference/TikTokPreferenceFragment.java
++++ b/extensions/tiktok/src/main/java/app/morphe/extension/tiktok/settings/preference/TikTokPreferenceFragment.java
+@@ -1500,8 +1500,11 @@
+         // to them. Only the home page settings opened on closes settings.
+         Bundle arguments = getArguments();
+         boolean overResults = arguments != null && arguments.getString(ARG_TARGET_KEY) != null;
++        // The appearance gateway also sits on the back stack below this menu.
++        boolean hasPreviousPage = getFragmentManager() != null
++                && getFragmentManager().getBackStackEntryCount() > 0;
+         masterHeader = SettingsHeaderPreference.master(context,
+-                overResults ? this::navigateBack : this::closeSettings,
++                overResults || hasPreviousPage ? this::navigateBack : this::closeSettings,
+                 () -> showRow(SettingsStatusPreference.KEY));
+         screen.addPreference(masterHeader);
+         SettingsSearchEntryPreference search = new SettingsSearchEntryPreference(context,

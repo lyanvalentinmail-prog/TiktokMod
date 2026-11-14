@@ -1,0 +1,55 @@
+--- a/extensions/tiktok/src/main/java/app/morphe/extension/tiktok/settings/preference/TikTokPreferenceFragment.java
++++ b/extensions/tiktok/src/main/java/app/morphe/extension/tiktok/settings/preference/TikTokPreferenceFragment.java
+@@ -76,6 +76,7 @@
+             + "Switches from patches you didn't tick in Morphe Manager aren't listed.";
+     private static final int REQUEST_DOWNLOAD_PATH_FOLDER = 8841;
+     private static final String ARG_SECTION = "morphe_settings_section";
++    private static final String ARG_MOD_APPEARANCE = "tiktok_mod_appearance";
+     private static final String ARG_HUB = "morphe_settings_hub";
+     private static final String ARG_SEARCH = "morphe_settings_search";
+     private static final String ARG_TARGET_KEY = "morphe_settings_target_key";
+@@ -977,6 +978,15 @@
+      * The settings screen's first page for a restart's return marker: the home page, scrolled to
+      * the marker's row when the restart came from home.
+      */
++    /** The normal Metra menu reached through TikTok Mod's appearance entrance. */
++    public static TikTokPreferenceFragment appearance() {
++        TikTokPreferenceFragment fragment = new TikTokPreferenceFragment();
++        Bundle arguments = new Bundle();
++        arguments.putBoolean(ARG_MOD_APPEARANCE, true);
++        fragment.setArguments(arguments);
++        return fragment;
++    }
++
+     public static TikTokPreferenceFragment home(String marker) {
+         TikTokPreferenceFragment home = new TikTokPreferenceFragment();
+         int mark = marker == null ? -1 : marker.indexOf(ROW_MARK);
+@@ -1507,6 +1517,28 @@
+                 overResults || hasPreviousPage ? this::navigateBack : this::closeSettings,
+                 () -> showRow(SettingsStatusPreference.KEY));
+         screen.addPreference(masterHeader);
++        if (arguments != null && arguments.getBoolean(ARG_MOD_APPEARANCE, false)) {
++            Preference accent = new Preference(context);
++            accent.setKey("tiktok_mod_accent_info");
++            accent.setTitle("Color de acento");
++            accent.setSummary("Se elige al parchear TikTok con Morphe");
++            accent.setOrder(-980);
++            accent.setOnPreferenceClickListener(preference -> {
++                new android.app.AlertDialog.Builder(context)
++                        .setTitle("Color de acento")
++                        .setMessage("Activa el parche Accent color y elige el color en Morphe antes de parchear. Para cambiarlo, hay que volver a parchear el APK original.")
++                        .setPositiveButton("Entendido", null).show();
++                return true;
++            });
++            screen.addPreference(accent);
++            Preference instagram = new Preference(context);
++            instagram.setKey("tiktok_mod_instagram_info");
++            instagram.setTitle("Perfil modo Instagram");
++            instagram.setSummary("Próximamente; todavía no modifica el perfil");
++            instagram.setSelectable(false);
++            instagram.setOrder(-970);
++            screen.addPreference(instagram);
++        }
+         SettingsSearchEntryPreference search = new SettingsSearchEntryPreference(context,
+                 preference -> {
+                     openSearch();
